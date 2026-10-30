@@ -232,6 +232,7 @@ function Root() {
   const [screen, setScreen] = useState('home');
   const [currentModule, setCurrentModule] = useState(null);
   const [questionId, setQuestionId] = useState(null);
+  const [resultId, setResultId] = useState(null);
   const [history, setHistory] = useState([]);
   const [entitlement, setEntitlement] = useState(null);
   const [paywallVisible, setPaywallVisible] = useState(false);
@@ -258,6 +259,7 @@ function Root() {
     if (!mod) return;
     setCurrentModule(mod);
     setQuestionId(mod.questions[0].id);
+    setResultId(null);
     setHistory([]);
     setScreen('guide');
   }, [entitlement]);
@@ -266,6 +268,7 @@ function Root() {
     setScreen('home');
     setCurrentModule(null);
     setQuestionId(null);
+    setResultId(null);
     setHistory([]);
   }, []);
 
@@ -277,12 +280,14 @@ function Root() {
     const prev = history[history.length - 1];
     setHistory(h => h.slice(0, -1));
     setQuestionId(prev);
+    setResultId(null);
     setScreen('guide');
   }, [history, goHome]);
 
   const handleAnswer = useCallback((nextId) => {
     setHistory(h => [...h, questionId]);
     if (nextId.startsWith('r')) {
+      setResultId(nextId);
       setScreen('result');
     } else {
       setQuestionId(nextId);
@@ -291,6 +296,7 @@ function Root() {
 
   const restartModule = useCallback(() => {
     setQuestionId(currentModule.questions[0].id);
+    setResultId(null);
     setHistory([]);
     setScreen('guide');
   }, [currentModule]);
@@ -379,8 +385,7 @@ function Root() {
   };
 
   const renderResult = () => {
-    if (!currentModule) return null;
-    const resultId = history[history.length - 1];
+    if (!currentModule || !resultId) return null;
     const result = currentModule.results[resultId];
     if (!result) return null;
     const colorMap = {
