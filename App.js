@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { Component, useState, useCallback, useEffect } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -9,7 +9,7 @@ import {
   StatusBar,
 } from 'react-native';
 import Paywall from './src/components/Paywall';
-import { canUseApp, markPro, readEntitlement } from './src/lib/entitlement';
+import { canUseApp, markPro, readEntitlement, TRIAL_DAYS } from './src/lib/entitlement';
 
 const modules = [
   {
@@ -196,6 +196,39 @@ const COLORS = {
 };
 
 export default function App() {
+  return (
+    <ErrorBoundary>
+      <Root />
+    </ErrorBoundary>
+  );
+}
+
+class ErrorBoundary extends Component {
+  state = { error: null };
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <SafeAreaView style={styles.container}>
+          <View style={styles.errorWrap}>
+            <Text style={styles.errorTitle}>出了点问题</Text>
+            <Text style={styles.errorText}>{String(this.state.error?.message ?? this.state.error)}</Text>
+            <TouchableOpacity style={styles.primaryBtn} onPress={() => this.setState({ error: null })}>
+              <Text style={styles.primaryBtnText}>重试</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function Root() {
   const [screen, setScreen] = useState('home');
   const [currentModule, setCurrentModule] = useState(null);
   const [questionId, setQuestionId] = useState(null);
@@ -204,7 +237,9 @@ export default function App() {
   const [paywallVisible, setPaywallVisible] = useState(false);
 
   useEffect(() => {
-    readEntitlement().then(setEntitlement);
+    readEntitlement()
+      .then(setEntitlement)
+      .catch(() => setEntitlement({ isPro: false, trialDaysLeft: TRIAL_DAYS, trialExpired: false }));
   }, []);
 
   const handlePurchased = useCallback(() => {
@@ -215,11 +250,12 @@ export default function App() {
   }, []);
 
   const startModule = useCallback((moduleId) => {
-    if (!canUseApp(entitlement)) {
+    if (entitlement && !canUseApp(entitlement)) {
       setPaywallVisible(true);
       return;
     }
     const mod = modules.find(m => m.id === moduleId);
+    if (!mod) return;
     setCurrentModule(mod);
     setQuestionId(mod.questions[0].id);
     setHistory([]);
@@ -307,7 +343,9 @@ export default function App() {
   };
 
   const renderGuide = () => {
+    if (!currentModule) return null;
     const question = currentModule.questions.find(q => q.id === questionId);
+    if (!question) return null;
     const total = currentModule.questions.length;
     const currentIndex = currentModule.questions.findIndex(q => q.id === questionId) + 1;
     const progress = currentIndex / total;
@@ -341,8 +379,10 @@ export default function App() {
   };
 
   const renderResult = () => {
+    if (!currentModule) return null;
     const resultId = history[history.length - 1];
     const result = currentModule.results[resultId];
+    if (!result) return null;
     const colorMap = {
       ok: COLORS.success,
       warn: COLORS.warning,
@@ -386,7 +426,7 @@ export default function App() {
             <Text style={styles.iconText}>←</Text>
           </TouchableOpacity>
         ) : <View style={styles.iconBtn} />}
-        <Text style={styles.headerTitle}>{screen === 'home' ? '小白炒股决策工具' : currentModule.title}</Text>
+        <Text style={styles.headerTitle}>{screen === 'home' || !currentModule ? '小白炒股决策工具' : currentModule.title}</Text>
         {screen !== 'home' ? (
           <TouchableOpacity onPress={goHome} style={styles.iconBtn}>
             <Text style={styles.iconText}>⌂</Text>
@@ -703,5 +743,24 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontSize: 16,
     fontWeight: '600',
+  },
+  errorWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.text,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  errorText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 24,
   },
 });

@@ -5,24 +5,16 @@ export function isIapSupported() {
   return false;
 }
 
-export async function loadLifetimeProduct() {
-  return null;
+export async function subscribePurchaseEvents() {
+  return () => {};
 }
 
 export async function buyLifetime() {
   throw new Error('iap-unsupported');
 }
 
+export async function finishLifetimePurchase() {}
+
 export async function restoreLifetime() {
   return false;
 }
-
-export function purchaseUpdatedListener() {
-  return { remove() {} };
-}
-
-export function purchaseErrorListener() {
-  return { remove() {} };
-}
-
-export async function finishTransaction() {}
