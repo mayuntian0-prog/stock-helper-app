@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import Paywall from './src/components/Paywall';
 import { canUseApp, markPro, readEntitlement, TRIAL_DAYS } from './src/lib/entitlement';
+import { DISCLAIMER_TEXT, acceptDisclaimer, readDisclaimerAccepted } from './src/lib/disclaimer';
 
 const modules = [
   {
@@ -236,11 +237,13 @@ function Root() {
   const [history, setHistory] = useState([]);
   const [entitlement, setEntitlement] = useState(null);
   const [paywallVisible, setPaywallVisible] = useState(false);
+  const [disclaimerAccepted, setDisclaimerAccepted] = useState(null);
 
   useEffect(() => {
     readEntitlement()
       .then(setEntitlement)
       .catch(() => setEntitlement({ isPro: false, trialDaysLeft: TRIAL_DAYS, trialExpired: false }));
+    readDisclaimerAccepted().then(setDisclaimerAccepted).catch(() => setDisclaimerAccepted(false));
   }, []);
 
   const handlePurchased = useCallback(() => {
@@ -248,6 +251,11 @@ function Root() {
       setEntitlement((prev) => ({ ...(prev ?? {}), isPro: true, trialExpired: false }));
       setPaywallVisible(false);
     });
+  }, []);
+
+  const handleAcceptDisclaimer = useCallback(() => {
+    acceptDisclaimer();
+    setDisclaimerAccepted(true);
   }, []);
 
   const startModule = useCallback((moduleId) => {
@@ -344,6 +352,9 @@ function Root() {
             </TouchableOpacity>
           ))}
         </View>
+        <Text style={styles.disclaimerFooter}>
+          本工具仅提供决策流程参考，不构成投资建议。股市有风险，盈亏自负。
+        </Text>
       </ScrollView>
     );
   };
@@ -411,6 +422,9 @@ function Root() {
             ))}
           </View>
           <Text style={styles.riskText}>⚠️ 风险提醒：{result.risk}</Text>
+          <Text style={styles.disclaimerInline}>
+            以上内容为通用经验总结，不构成投资建议，请独立决策并自行承担风险。
+          </Text>
           <TouchableOpacity style={styles.primaryBtn} onPress={restartModule} activeOpacity={0.9}>
             <Text style={styles.primaryBtnText}>重新评估</Text>
           </TouchableOpacity>
@@ -456,6 +470,19 @@ function Root() {
         onClose={() => setPaywallVisible(false)}
         onPurchased={handlePurchased}
       />
+      {disclaimerAccepted === false && (
+        <View style={styles.disclaimerOverlay}>
+          <View style={styles.disclaimerCard}>
+            <Text style={styles.disclaimerTitle}>使用前请阅读</Text>
+            <ScrollView style={styles.disclaimerBody}>
+              <Text style={styles.disclaimerBodyText}>{DISCLAIMER_TEXT}</Text>
+            </ScrollView>
+            <TouchableOpacity style={styles.primaryBtn} onPress={handleAcceptDisclaimer} activeOpacity={0.9}>
+              <Text style={styles.primaryBtnText}>我已阅读并同意</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -767,5 +794,51 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 19,
     marginBottom: 24,
+  },
+  disclaimerFooter: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 17,
+    marginTop: 4,
+    marginBottom: 8,
+    paddingHorizontal: 8,
+  },
+  disclaimerInline: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 16,
+    marginBottom: 20,
+  },
+  disclaimerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(17,24,39,0.55)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  disclaimerCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 24,
+  },
+  disclaimerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 12,
+  },
+  disclaimerBody: {
+    maxHeight: 220,
+    marginBottom: 20,
+  },
+  disclaimerBodyText: {
+    fontSize: 14,
+    color: COLORS.text,
+    lineHeight: 22,
   },
 });
