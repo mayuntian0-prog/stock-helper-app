@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "炒股助手",
+    "name": "小白炒股决策工具",
     "slug": "StockHelper",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -26,6 +26,8 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": []
+    "plugins": [
+      "expo-secure-store"
+    ]
   }
 }

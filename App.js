@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -8,6 +8,8 @@ import {
   StyleSheet,
   StatusBar,
 } from 'react-native';
+import Paywall from './src/components/Paywall';
+import { canUseApp, markPro, readEntitlement } from './src/lib/entitlement';
 
 const modules = [
   {
@@ -147,10 +149,10 @@ const modules = [
     ],
     results: {
       r1: { status: 'ok', icon: '🧘', title: '心态很好，按计划执行', summary: '情绪稳定是炒股最大的优势。', actions: ['按自己的交易计划操作', '不要被市场噪音干扰', '继续保持'], risk: '平静不等于麻木，计划错了也要调整。' },
-      r2: { status: 'warn', icon: '🎯', title: '兴奋是盈利的敌人', summary: '持仓涨了让人兴奋，但兴奋时最容易做错决定。', actions: ['检查是否到了止盈位', '不要因兴奋而加仓', '让利润奔跑但要设止盈'], risk: '兴奋追高 often 买在短期高点。' },
+      r2: { status: 'warn', icon: '🎯', title: '兴奋是盈利的敌人', summary: '持仓涨了让人兴奋，但兴奋时最容易做错决定。', actions: ['检查是否到了止盈位', '不要因兴奋而加仓', '让利润奔跑但要设止盈'], risk: '兴奋追高，容易买在短期高点。' },
       r3: { status: 'no', icon: '🛑', title: '不要追别人的票', summary: '看到别人赚钱就冲动买入，大多是接盘。', actions: ['关闭群聊/论坛', '回到选股流程重新判断', '没计划就不买'], risk: 'FOMO（害怕错过）是新手大亏主因。' },
       r4: { status: 'warn', icon: '🌊', title: '小波动不要慌', summary: '1-3% 的波动很正常，不要因此乱了节奏。', actions: ['检查买入逻辑是否还在', '设置止损位', '该干嘛干嘛'], risk: '小波动频繁操作会磨损本金。' },
-      r5: { status: 'no', icon: '🚨', title: '先暂停 30 分钟', summary: '大跌时情绪主导决策， 90% 会做错。', actions: ['离开屏幕 30 分钟', '回到卖点流程理性判断', '不要一键清仓'], risk: '恐慌性割肉 often 割在最低点。' },
+      r5: { status: 'no', icon: '🚨', title: '先暂停 30 分钟', summary: '大跌时情绪主导决策， 90% 会做错。', actions: ['离开屏幕 30 分钟', '回到卖点流程理性判断', '不要一键清仓'], risk: '恐慌性割肉，容易割在最低点。' },
       r6: { status: 'warn', icon: '⚖️', title: '用规则替代情绪', summary: '舍不得卖是因为沉没成本，但炒股要看未来。', actions: ['重新评估卖点流程', '如果逻辑不在了，分批卖', '设置条件单自动执行'], risk: '舍不得卖会让小亏变大亏。' },
       r7: { status: 'warn', icon: '⏸️', title: '怕高就等回踩', summary: '想买又怕追高，说明这笔交易没把握。', actions: ['等回踩再考虑', '或把想买的价位设条件单', '不追就放弃'], risk: '没把握硬上容易买套。' }
     }
@@ -198,14 +200,31 @@ export default function App() {
   const [currentModule, setCurrentModule] = useState(null);
   const [questionId, setQuestionId] = useState(null);
   const [history, setHistory] = useState([]);
+  const [entitlement, setEntitlement] = useState(null);
+  const [paywallVisible, setPaywallVisible] = useState(false);
+
+  useEffect(() => {
+    readEntitlement().then(setEntitlement);
+  }, []);
+
+  const handlePurchased = useCallback(() => {
+    markPro().then(() => {
+      setEntitlement((prev) => ({ ...(prev ?? {}), isPro: true, trialExpired: false }));
+      setPaywallVisible(false);
+    });
+  }, []);
 
   const startModule = useCallback((moduleId) => {
+    if (!canUseApp(entitlement)) {
+      setPaywallVisible(true);
+      return;
+    }
     const mod = modules.find(m => m.id === moduleId);
     setCurrentModule(mod);
     setQuestionId(mod.questions[0].id);
     setHistory([]);
     setScreen('guide');
-  }, []);
+  }, [entitlement]);
 
   const goHome = useCallback(() => {
     setScreen('home');
@@ -240,24 +259,52 @@ export default function App() {
     setScreen('guide');
   }, [currentModule]);
 
-  const renderHome = () => (
-    <ScrollView contentContainerStyle={styles.homeScroll}>
-      <View style={styles.hero}>
-        <Text style={styles.heroTitle}>新手决策向导</Text>
-        <Text style={styles.heroText}>每次操作前，跟着引导一步步做决策，不再凭感觉炒股。</Text>
-      </View>
-      <Text style={styles.sectionTitle}>操作板块</Text>
-      <View style={styles.grid}>
-        {modules.map(m => (
-          <TouchableOpacity key={m.id} style={styles.card} onPress={() => startModule(m.id)} activeOpacity={0.9}>
-            <Text style={styles.cardIcon}>{m.icon}</Text>
-            <Text style={styles.cardTitle}>{m.title}</Text>
-            <Text style={styles.cardDesc}>{m.desc}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </ScrollView>
-  );
+  const renderHome = () => {
+    const locked = !canUseApp(entitlement);
+    let banner = null;
+    if (entitlement?.isPro) {
+      banner = (
+        <View style={[styles.banner, styles.bannerPro]}>
+          <Text style={styles.bannerProText}>终身会员已解锁 ✓ 全部板块可用</Text>
+        </View>
+      );
+    } else if (entitlement?.trialExpired) {
+      banner = (
+        <TouchableOpacity style={[styles.banner, styles.bannerLocked]} onPress={() => setPaywallVisible(true)}>
+          <Text style={styles.bannerLockedText}>试用已结束 · 点击解锁终身会员（¥12）</Text>
+        </TouchableOpacity>
+      );
+    } else if (entitlement) {
+      banner = (
+        <TouchableOpacity style={[styles.banner, styles.bannerTrial]} onPress={() => setPaywallVisible(true)}>
+          <Text style={styles.bannerTrialText}>
+            试用还剩 {entitlement.trialDaysLeft} 天 · 点击提前解锁终身会员（¥12）
+          </Text>
+        </TouchableOpacity>
+      );
+    }
+
+    return (
+      <ScrollView contentContainerStyle={styles.homeScroll}>
+        <View style={styles.hero}>
+          <Text style={styles.heroTitle}>新手决策向导</Text>
+          <Text style={styles.heroText}>每次操作前，跟着引导一步步做决策，不再凭感觉炒股。</Text>
+        </View>
+        {banner}
+        <Text style={styles.sectionTitle}>操作板块</Text>
+        <View style={styles.grid}>
+          {modules.map(m => (
+            <TouchableOpacity key={m.id} style={styles.card} onPress={() => startModule(m.id)} activeOpacity={0.9}>
+              <Text style={styles.cardIcon}>{m.icon}</Text>
+              <Text style={styles.cardTitle}>{m.title}</Text>
+              <Text style={styles.cardDesc}>{m.desc}</Text>
+              {locked ? <Text style={styles.cardLock}>🔒</Text> : null}
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
+    );
+  };
 
   const renderGuide = () => {
     const question = currentModule.questions.find(q => q.id === questionId);
@@ -339,7 +386,7 @@ export default function App() {
             <Text style={styles.iconText}>←</Text>
           </TouchableOpacity>
         ) : <View style={styles.iconBtn} />}
-        <Text style={styles.headerTitle}>{screen === 'home' ? '炒股助手' : currentModule.title}</Text>
+        <Text style={styles.headerTitle}>{screen === 'home' ? '小白炒股决策工具' : currentModule.title}</Text>
         {screen !== 'home' ? (
           <TouchableOpacity onPress={goHome} style={styles.iconBtn}>
             <Text style={styles.iconText}>⌂</Text>
@@ -351,6 +398,19 @@ export default function App() {
         {screen === 'guide' && renderGuide()}
         {screen === 'result' && renderResult()}
       </View>
+      <Paywall
+        visible={paywallVisible}
+        canDismiss
+        badgeText={
+          entitlement?.isPro
+            ? '终身会员'
+            : entitlement?.trialExpired
+              ? '7 天试用已结束'
+              : `试用还剩 ${entitlement?.trialDaysLeft ?? 7} 天`
+        }
+        onClose={() => setPaywallVisible(false)}
+        onPurchased={handlePurchased}
+      />
     </SafeAreaView>
   );
 }
@@ -392,6 +452,45 @@ const styles = StyleSheet.create({
   },
   homeScroll: {
     padding: 16,
+  },
+  banner: {
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+  },
+  bannerPro: {
+    backgroundColor: '#dcfce7',
+  },
+  bannerProText: {
+    color: '#15803d',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  bannerLocked: {
+    backgroundColor: '#fef3c7',
+  },
+  bannerLockedText: {
+    color: '#b45309',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  bannerTrial: {
+    backgroundColor: '#dbeafe',
+  },
+  bannerTrialText: {
+    color: '#1d4ed8',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  cardLock: {
+    position: 'absolute',
+    top: 10,
+    right: 12,
+    fontSize: 14,
   },
   hero: {
     backgroundColor: COLORS.primary,
